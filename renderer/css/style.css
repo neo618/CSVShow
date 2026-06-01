@@ -204,6 +204,39 @@ html, body {
   font-size: 14px;
 }
 
+/* 缩放控制 */
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-zoom {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  min-width: 32px;
+  padding: 0 10px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.btn-zoom:hover:not(:disabled) {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.btn-zoom:disabled {
+  opacity: 0.35;
+}
+
+.zoom-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-color);
+  margin: 0 4px;
+}
+
 /* ========== 主体布局 ========== */
 #main-content {
   display: flex;
@@ -307,10 +340,37 @@ html, body {
   cursor: pointer;
   border-bottom: 1px solid rgba(58, 63, 75, 0.2);
   transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .channel-list .channel-item:hover {
   background: rgba(0, 206, 209, 0.15);
+}
+
+.channel-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.channel-item:hover .channel-check {
+  border-color: var(--border-active);
+}
+
+.channel-item.selected .channel-check {
+  border-color: var(--accent-green);
+  background: var(--accent-green);
+  box-shadow: 0 0 4px rgba(0, 255, 136, 0.4);
+}
+
+.channel-name {
+  flex: 1;
 }
 
 .channel-list .channel-item.selected {
@@ -352,6 +412,53 @@ html, body {
   width: 8px;
   height: 8px;
   flex-shrink: 0;
+}
+
+/* 紧凑文件标签 */
+.file-group {
+  margin-bottom: 8px;
+}
+
+.file-group-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  padding: 2px 0;
+  margin-bottom: 3px;
+  border-bottom: 1px solid rgba(58, 63, 75, 0.3);
+}
+
+.file-list-compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.file-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: 'Consolas', monospace;
+  border: 1px solid;
+  border-radius: 2px;
+  background: rgba(26, 29, 35, 0.6);
+  white-space: nowrap;
+}
+
+.file-tag-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 1px;
+}
+
+.file-tag em {
+  font-style: normal;
+  font-size: 10px;
+  opacity: 0.7;
+  margin-left: 2px;
 }
 
 .empty-hint {

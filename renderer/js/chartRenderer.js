@@ -19,26 +19,24 @@ class WaveformChartRenderer {
     this.currentData = [];
     this.currentChannelName = '';
     this.lineColors = DEFAULT_COLORS;
+    this.savedXMin = null;
+    this.savedXMax = null;
   }
 
-  /**
-   * 获取曲线颜色（循环使用预设颜色）
-   */
   getColor(index) {
     return this.lineColors[index % this.lineColors.length];
   }
 
-  /**
-   * 渲染多曲线叠加波形图
-   * @param {Array} seriesData - [{ label, timeData, values, rowCount }]
-   * @param {string} channelName - 通道名
-   */
   render(seriesData, channelName) {
     this.currentData = seriesData;
     this.currentChannelName = channelName;
 
-    // 销毁旧图表
+    // 保存当前缩放/平移状态
+    var prevXMin = null, prevXMax = null;
     if (this.chart) {
+      var xs = this.chart.scales.x;
+      prevXMin = xs.min;
+      prevXMax = xs.max;
       this.chart.destroy();
       this.chart = null;
     }
@@ -49,13 +47,11 @@ class WaveformChartRenderer {
       return;
     }
 
-    // 显示canvas，隐藏占位符
     this.canvas.style.display = 'block';
     document.getElementById('chart-placeholder').style.display = 'none';
 
-    // 构建数据集
     var datasets = seriesData.map((series, index) => ({
-      label: series.label,
+      label: (series.channelName ? '[' + series.channelName + '] ' : '') + series.label,
       data: series.values.map((y, i) => ({
         x: series.timeData[i],
         y: y
@@ -69,6 +65,8 @@ class WaveformChartRenderer {
       fill: false,
       clip: true
     }));
+
+    var self = this;
 
     this.chart = new Chart(this.ctx, {
       type: 'line',
@@ -171,7 +169,7 @@ class WaveformChartRenderer {
           zoom: {
             pan: {
               enabled: true,
-              mode: 'xy',
+              mode: 'x',
               modifierKey: null
             },
             zoom: {
@@ -183,27 +181,104 @@ class WaveformChartRenderer {
                 enabled: true
               },
               drag: {
-                enabled: true,
-                backgroundColor: 'rgba(0, 206, 209, 0.1)',
-                borderColor: '#00ced1',
-                borderWidth: 1
+                enabled: false
               },
-              mode: 'xy'
+              mode: 'x'
             },
             limits: {
-              x: { minRange: 0.01 },
-              y: { minRange: 0.001 }
+              x: { minRange: 0.01 }
             }
           }
         }
       }
     });
 
-    // 双击重置缩放
-    var chart = this.chart;
-    this.canvas.ondblclick = function() {
-      chart.resetZoom();
-    };
+    // 恢复之前的X轴缩放/平移范围
+    if (prevXMin !== null && prevXMax !== null && this.chart) {
+      this.chart.zoomScale('x', { min: prevXMin, max: prevXMax }, 'default');
+      this.chart.update('none');
+    }
+
+    // 手动拖拽平移（直接监听canvas鼠标事件）
+    this._setupDragPan();
+
+    // 缩放按钮事件暴露到全局
+    window._chartInstance = this;
+  }
+
+  // 手动拖拽平移（绕过chartjs-plugin-zoom的pan兼容性问题）
+  _setupDragPan() {
+    var self = this;
+    var canvas = this.canvas;
+    // 防止重复绑定
+    if (canvas._dragPanBound) return;
+    canvas._dragPanBound = true;
+
+    var dragging = false;
+    var startX = 0;
+    var startMin = 0;
+    var startMax = 0;
+
+    canvas.addEventListener('mousedown', function(e) {
+      if (e.button !== 0) return;  // 只响应左键
+      if (!self.chart) return;
+      dragging = true;
+      startX = e.clientX;
+      var xs = self.chart.scales.x;
+      startMin = xs.min;
+      startMax = xs.max;
+      canvas.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', function(e) {
+      if (!dragging || !self.chart) return;
+      var dx = e.clientX - startX;
+      var xs = self.chart.scales.x;
+      // 把像素偏移转成X轴数值偏移
+      var chartArea = self.chart.chartArea;
+      if (!chartArea) return;
+      var pxRange = chartArea.right - chartArea.left;
+      var valPerPx = (startMax - startMin) / pxRange;
+      var offset = -dx * valPerPx;
+      self.chart.zoomScale('x', { min: startMin + offset, max: startMax + offset }, 'default');
+      self.chart.update('none');
+    });
+
+    window.addEventListener('mouseup', function() {
+      if (dragging) {
+        dragging = false;
+        canvas.style.cursor = '';
+      }
+    });
+  }
+
+  // 放大（X轴，当前中心点）
+  zoomIn() {
+    if (!this.chart) return;
+    var xScale = this.chart.scales.x;
+    var factor = 0.6;
+    var xCenter = (xScale.max + xScale.min) / 2;
+    var xRange = (xScale.max - xScale.min) * factor;
+    this.chart.zoomScale('x', { min: xCenter - xRange / 2, max: xCenter + xRange / 2 }, 'default');
+    this.chart.update('none');
+  }
+
+  // 缩小（X轴，当前中心点）
+  zoomOut() {
+    if (!this.chart) return;
+    var xScale = this.chart.scales.x;
+    var factor = 1.6;
+    var xCenter = (xScale.max + xScale.min) / 2;
+    var xRange = (xScale.max - xScale.min) * factor;
+    this.chart.zoomScale('x', { min: xCenter - xRange / 2, max: xCenter + xRange / 2 }, 'default');
+    this.chart.update('none');
+  }
+
+  // 重置缩放
+  resetZoom() {
+    if (!this.chart) return;
+    this.chart.resetZoom();
   }
 
   /**

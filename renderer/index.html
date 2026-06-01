@@ -93,9 +93,16 @@
     <section id="main-viz">
       <div class="viz-header">
         <span id="chart-title" class="chart-title">-- 等待数据加载 --</span>
-        <button id="btn-export" class="btn btn-accent" disabled>
-          <span class="btn-icon">⬇</span> 导出图片
-        </button>
+        <div class="zoom-controls">
+          <button id="btn-zoom-in" class="btn btn-zoom" title="放大 (以当前中心放大)" disabled>🔍+</button>
+          <button id="btn-zoom-out" class="btn btn-zoom" title="缩小 (以当前中心缩小)" disabled>🔍-</button>
+          <span class="zoom-sep"></span>
+          <button id="btn-zoom-reset" class="btn btn-zoom" title="恢复原始视图" disabled>↺ 重置</button>
+          <span class="zoom-sep"></span>
+          <button id="btn-export" class="btn btn-accent" disabled>
+            <span class="btn-icon">⬇</span> 导出图片
+          </button>
+        </div>
       </div>
       <div id="chart-container">
         <canvas id="waveform-canvas"></canvas>

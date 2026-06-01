@@ -9,6 +9,9 @@ const elements = {
   btnRefresh: document.getElementById('btn-refresh'),
   btnReset: document.getElementById('btn-reset'),
   btnExport: document.getElementById('btn-export'),
+  btnZoomIn: document.getElementById('btn-zoom-in'),
+  btnZoomOut: document.getElementById('btn-zoom-out'),
+  btnZoomReset: document.getElementById('btn-zoom-reset'),
   currentDir: document.getElementById('current-dir'),
   statusIndicator: document.getElementById('status-indicator'),
   statusText: document.getElementById('status-text'),
@@ -29,8 +32,8 @@ const elements = {
 let state = {
   dirPath: null,
   allChannels: [],
-  selectedChannel: null,
-  matchedData: []
+  selectedChannels: [],    // 多选通道名数组
+  matchedData: []          // 合并后的所有通道数据
 };
 
 // ========== 状态更新工具 ==========
@@ -69,8 +72,7 @@ async function loadDirectory(dirPath) {
   elements.currentDir.title = dirPath;
   setStatus('loading', '正在扫描目录...');
 
-  // 扫描CSV文件
-  const scanResult = await electronIPC.invoke('scan-directory', dirPath);
+  var scanResult = await electronIPC.invoke('scan-directory', dirPath);
   if (!scanResult.success || scanResult.files.length === 0) {
     setStatus('error', '未找到CSV文件');
     updateStats(0, 0, 0, 0);
@@ -79,96 +81,125 @@ async function loadDirectory(dirPath) {
     return;
   }
 
-  // 获取所有通道名
-  const channelResult = await electronIPC.invoke('get-all-channels', dirPath);
+  var channelResult = await electronIPC.invoke('get-all-channels', dirPath);
   if (!channelResult.success) {
     setStatus('error', '目录解析失败');
     return;
   }
 
   state.allChannels = channelResult.channels;
+  state.selectedChannels = [];
+  state.matchedData = [];
   updateStats(scanResult.files.length, channelResult.channels.length, 0, 0);
 
-  // 启用UI
   elements.channelSearch.disabled = false;
   elements.btnRefresh.disabled = false;
 
-  // 渲染通道列表
   renderChannelList('');
-  setStatus('ready', '扫描完成，请选择通道');
+  setStatus('ready', '扫描完成，请选择通道（可多选）');
 }
 
-// ========== 通道列表渲染 ==========
+// ========== 通道列表渲染（多选） ==========
 function renderChannelList(filterText) {
-  const filter = filterText.trim();
-  const channels = filter
-    ? state.allChannels.filter(ch => ch === filter || ch.includes(filter))
+  var filter = filterText.trim();
+  var channels = filter
+    ? state.allChannels.filter(function(ch) { return ch === filter || ch.includes(filter); })
     : state.allChannels;
-
-  if (filter && state.allChannels.includes(filter) && channels.length === 0) {
-    // filter精确命中
-  }
 
   if (channels.length === 0 && filter) {
     elements.channelList.innerHTML = '<div class="channel-item no-match">未检索到对应通道数据</div>';
   } else if (channels.length === 0) {
     elements.channelList.innerHTML = '<div class="empty-hint">无可用通道</div>';
   } else {
-    elements.channelList.innerHTML = channels.map(ch => {
-      const isSelected = ch === state.selectedChannel;
-      const cssClass = isSelected ? 'channel-item active' : 'channel-item';
-      return '<div class="' + cssClass + '" data-channel="' + ch + '">' + ch + '</div>';
-    }).join('');
+    var html = '';
+    for (var i = 0; i < channels.length; i++) {
+      var ch = channels[i];
+      var checked = state.selectedChannels.includes(ch);
+      var cssClass = checked ? 'channel-item selected' : 'channel-item';
+      html += '<div class="' + cssClass + '" data-channel="' + ch + '">' +
+        '<span class="channel-check"></span>' +
+        '<span class="channel-name">' + ch + '</span>' +
+        '</div>';
+    }
+    elements.channelList.innerHTML = html;
   }
 }
 
-// 通道点击事件
-elements.channelList.addEventListener('click', async (e) => {
-  const item = e.target.closest('.channel-item');
+// 通道点击事件（切换选中）
+elements.channelList.addEventListener('click', async function(e) {
+  var item = e.target.closest('.channel-item');
   if (!item || item.classList.contains('no-match')) return;
 
-  const channelName = item.dataset.channel;
-  if (channelName === state.selectedChannel) return;
-
-  await selectChannel(channelName);
+  var channelName = item.dataset.channel;
+  toggleChannel(channelName);
 });
 
-// 搜索框输入
-let searchTimeout = null;
-elements.channelSearch.addEventListener('input', (e) => {
-  const value = e.target.value;
+function toggleChannel(channelName) {
+  var idx = state.selectedChannels.indexOf(channelName);
+  if (idx >= 0) {
+    state.selectedChannels.splice(idx, 1);
+  } else {
+    state.selectedChannels.push(channelName);
+  }
 
-  // 自动精准匹配：如果输入正好匹配某个通道名
+  renderChannelList(elements.channelSearch.value);
+
+  // 有选中时自动加载，无选中时清空
+  if (state.selectedChannels.length > 0) {
+    loadSelectedChannels();
+  } else {
+    clearViz();
+  }
+}
+
+// 搜索框输入
+var searchTimeout = null;
+elements.channelSearch.addEventListener('input', function(e) {
+  var value = e.target.value;
   clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(async () => {
-    if (value.trim() && state.allChannels.includes(value.trim())) {
-      await selectChannel(value.trim());
+
+  // 精准匹配自动勾选
+  searchTimeout = setTimeout(function() {
+    var trimmed = value.trim();
+    if (trimmed && state.allChannels.includes(trimmed)) {
+      if (!state.selectedChannels.includes(trimmed)) {
+        toggleChannel(trimmed);
+        return;
+      }
     }
   }, 300);
 
   renderChannelList(value);
 });
 
-// ========== 通道选择与数据加载 ==========
-async function selectChannel(channelName) {
-  if (!state.dirPath) return;
+// ========== 加载所有选中的通道数据 ==========
+async function loadSelectedChannels() {
+  if (!state.dirPath || state.selectedChannels.length === 0) return;
 
-  state.selectedChannel = channelName;
-  elements.channelSearch.value = channelName;
-  elements.chartTitle.textContent = '通道: ' + channelName;
+  var channelNames = state.selectedChannels.slice();
+  var channelList = channelNames.join(', ');
+  elements.chartTitle.textContent = '通道: ' + channelList;
 
-  setStatus('loading', '正在加载通道数据: ' + channelName);
+  setStatus('loading', '正在加载 ' + channelNames.length + ' 个通道数据...');
 
-  const result = await electronIPC.invoke('extract-channel-data', state.dirPath, channelName);
-  if (!result.success) {
-    setStatus('error', '数据加载失败');
-    return;
+  // 批量加载每个通道的数据
+  var allResults = [];
+  for (var i = 0; i < channelNames.length; i++) {
+    var ch = channelNames[i];
+    var result = await electronIPC.invoke('extract-channel-data', state.dirPath, ch);
+    if (result.success && result.results.length > 0) {
+      // 给每个series打上通道标签
+      for (var j = 0; j < result.results.length; j++) {
+        result.results[j].channelName = ch;
+        allResults.push(result.results[j]);
+      }
+    }
   }
 
-  state.matchedData = result.results;
+  state.matchedData = allResults;
 
-  if (result.results.length === 0) {
-    setStatus('error', '未检索到对应通道数据');
+  if (allResults.length === 0) {
+    setStatus('error', '所选通道无匹配数据');
     updateStats(
       parseInt(elements.statFileCount.textContent),
       state.allChannels.length,
@@ -177,64 +208,102 @@ async function selectChannel(channelName) {
     window.waveformChart.clear();
     updateFileList([]);
     elements.btnExport.disabled = true;
-    renderChannelList(elements.channelSearch.value);
+    elements.btnZoomIn.disabled = true;
+    elements.btnZoomOut.disabled = true;
+    elements.btnZoomReset.disabled = true;
     return;
   }
 
-  // 渲染波形图
-  window.waveformChart.render(result.results, channelName);
+  // 渲染波形图（传入不带channelName的series，由chartRenderer处理label）
+  window.waveformChart.render(allResults, channelList);
 
   // 更新统计
-  const totalRows = result.results.reduce((sum, s) => sum + s.rowCount, 0);
+  var totalRows = allResults.reduce(function(sum, s) { return sum + s.rowCount; }, 0);
   updateStats(
     parseInt(elements.statFileCount.textContent),
     state.allChannels.length,
-    result.results.length,
+    allResults.length,
     totalRows
   );
 
-  // 更新文件列表
-  updateFileList(result.results);
+  updateFileList(allResults);
 
-  // 启用导出按钮
   elements.btnExport.disabled = false;
+  elements.btnZoomIn.disabled = false;
+  elements.btnZoomOut.disabled = false;
+  elements.btnZoomReset.disabled = false;
 
-  setStatus('ready', '已加载 ' + result.results.length + ' 个文件的 ' + channelName + ' 通道数据');
-  renderChannelList(elements.channelSearch.value);
+  setStatus('ready', '已加载 ' + channelNames.length + ' 个通道，共 ' + allResults.length + ' 个波形');
+}
+
+function clearViz() {
+  state.matchedData = [];
+  elements.chartTitle.textContent = '-- 等待数据加载 --';
+  window.waveformChart.clear();
+  updateFileList([]);
+  updateStats(
+    parseInt(elements.statFileCount.textContent),
+    state.allChannels.length,
+    0, 0
+  );
+  elements.btnExport.disabled = true;
+  elements.btnZoomIn.disabled = true;
+  elements.btnZoomOut.disabled = true;
+  elements.btnZoomReset.disabled = true;
 }
 
 // ========== 匹配文件列表 ==========
 function updateFileList(matchedData) {
+  var listEl = elements.fileList;
   if (matchedData.length === 0) {
-    elements.fileList.innerHTML = '<div class="empty-hint">未匹配文件</div>';
+    listEl.innerHTML = '<div class="empty-hint">未匹配文件</div>';
     return;
   }
 
-  const colors = FILE_COLORS;
-  elements.fileList.innerHTML = matchedData.map((item, index) => {
-    const color = colors[index % colors.length];
-    return '' +
-      '<div class="file-item">' +
-        '<span class="file-dot" style="background:' + color + '; border:1px solid ' + color + '"></span>' +
-        '<span>' + item.label + '</span>' +
-        '<span style="color:#5c6270; font-size:11px;">(' + item.rowCount + '行)</span>' +
-      '</div>';
-  }).join('');
+  // 按通道分组显示
+  var groups = {};
+  for (var i = 0; i < matchedData.length; i++) {
+    var item = matchedData[i];
+    var ch = item.channelName || '未知';
+    if (!groups[ch]) groups[ch] = [];
+    groups[ch].push(item);
+  }
+
+  var colorIdx = 0;
+  var html = '';
+  var channelKeys = Object.keys(groups);
+  for (var g = 0; g < channelKeys.length; g++) {
+    var chKey = channelKeys[g];
+    var items = groups[chKey];
+    html += '<div class="file-group">';
+    html += '<div class="file-group-header">' + chKey + ' (' + items.length + '个文件)</div>';
+    html += '<div class="file-list-compact">';
+    for (var j = 0; j < items.length; j++) {
+      var item = items[j];
+      var color = FILE_COLORS[colorIdx % FILE_COLORS.length];
+      colorIdx++;
+      html += '<span class="file-tag" style="border-color:' + color + '; color:' + color + '">' +
+        '<span class="file-tag-dot" style="background:' + color + '"></span>' +
+        item.label + '<em>(' + item.rowCount + '行)</em></span>';
+    }
+    html += '</div></div>';
+  }
+  listEl.innerHTML = html;
 }
 
 // ========== 刷新 ==========
-elements.btnRefresh.addEventListener('click', async () => {
+elements.btnRefresh.addEventListener('click', async function() {
   if (!state.dirPath) return;
   setStatus('loading', '正在刷新...');
   await loadDirectory(state.dirPath);
-  if (state.selectedChannel) {
-    await selectChannel(state.selectedChannel);
+  if (state.selectedChannels.length > 0) {
+    await loadSelectedChannels();
   }
 });
 
 // ========== 重置 ==========
-elements.btnReset.addEventListener('click', () => {
-  state.selectedChannel = null;
+elements.btnReset.addEventListener('click', function() {
+  state.selectedChannels = [];
   state.matchedData = [];
   elements.channelSearch.value = '';
   elements.channelSearch.disabled = true;
@@ -244,16 +313,32 @@ elements.btnReset.addEventListener('click', () => {
   updateStats(0, 0, 0, 0);
   elements.channelList.innerHTML = '<div class="empty-hint">请先选择数据目录</div>';
   elements.btnExport.disabled = true;
+  elements.btnZoomIn.disabled = true;
+  elements.btnZoomOut.disabled = true;
+  elements.btnZoomReset.disabled = true;
   elements.btnRefresh.disabled = true;
   setStatus('idle', '就绪');
 });
 
 // ========== 导出图片 ==========
-elements.btnExport.addEventListener('click', async () => {
-  const success = await window.waveformChart.exportImage();
+elements.btnExport.addEventListener('click', async function() {
+  var success = await window.waveformChart.exportImage();
   if (success) {
     setStatus('ready', '图片导出成功');
   }
+});
+
+// ========== 缩放控制 ==========
+elements.btnZoomIn.addEventListener('click', function() {
+  window.waveformChart.zoomIn();
+});
+
+elements.btnZoomOut.addEventListener('click', function() {
+  window.waveformChart.zoomOut();
+});
+
+elements.btnZoomReset.addEventListener('click', function() {
+  window.waveformChart.resetZoom();
 });
 
 // 文件列表颜色（与 chartRenderer 一致）
