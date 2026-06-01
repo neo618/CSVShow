@@ -1,0 +1,13 @@
+{
+  "appId": "com.waveshow.csvshow",
+  "productName": "CSVShow",
+  "directories": {
+    "output": "release"
+  },
+  "win": {
+    "target": "portable"
+  },
+  "portable": {
+    "artifactName": "CSVShow-${version}.${ext}"
+  }
+}

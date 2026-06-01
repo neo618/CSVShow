@@ -10,7 +10,9 @@
   "license": "MIT",
   "dependencies": {
     "chart.js": "^4.4.0",
-    "chartjs-plugin-zoom": "^2.0.1",
-    "electron": "^28.3.3"
+    "chartjs-plugin-zoom": "^2.0.1"
+  },
+  "devDependencies": {
+    "electron": "28.3.3"
   }
 }
