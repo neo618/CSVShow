@@ -168,9 +168,7 @@ class WaveformChartRenderer {
           },
           zoom: {
             pan: {
-              enabled: true,
-              mode: 'x',
-              modifierKey: null
+              enabled: false
             },
             zoom: {
               wheel: {
@@ -199,55 +197,122 @@ class WaveformChartRenderer {
       this.chart.update('none');
     }
 
-    // 手动拖拽平移（直接监听canvas鼠标事件）
-    this._setupDragPan();
+    // 手动鼠标交互（左键框选放大 + 右键拖拽平移）
+    this._setupMouseInteraction();
 
     // 缩放按钮事件暴露到全局
     window._chartInstance = this;
   }
 
-  // 手动拖拽平移（绕过chartjs-plugin-zoom的pan兼容性问题）
-  _setupDragPan() {
+  // 左键框选放大 + 右键拖拽平移
+  _setupMouseInteraction() {
     var self = this;
     var canvas = this.canvas;
-    // 防止重复绑定
-    if (canvas._dragPanBound) return;
-    canvas._dragPanBound = true;
+    if (canvas._mouseBound) return;
+    canvas._mouseBound = true;
 
-    var dragging = false;
-    var startX = 0;
-    var startMin = 0;
-    var startMax = 0;
+    // --- 框选状态 ---
+    var selecting = false;
+    var selStartX = 0;
+    var selStartY = 0;
+    var selBox = null;
+
+    // --- 右键平移状态 ---
+    var panning = false;
+    var panStartX = 0;
+    var panStartXMin = 0;
+    var panStartXMax = 0;
+
+    // 创建框选矩形元素
+    function ensureSelBox() {
+      if (selBox) return;
+      selBox = document.createElement('div');
+      selBox.style.cssText = 'position:fixed;border:1px dashed #00ced1;background:rgba(0,206,209,0.08);pointer-events:none;z-index:9999;display:none;';
+      document.body.appendChild(selBox);
+    }
 
     canvas.addEventListener('mousedown', function(e) {
-      if (e.button !== 0) return;  // 只响应左键
       if (!self.chart) return;
-      dragging = true;
-      startX = e.clientX;
-      var xs = self.chart.scales.x;
-      startMin = xs.min;
-      startMax = xs.max;
-      canvas.style.cursor = 'grabbing';
+      if (e.button === 2) {
+        // 右键：开始平移
+        e.preventDefault();
+        panning = true;
+        panStartX = e.clientX;
+        var xs = self.chart.scales.x;
+        panStartXMin = xs.min;
+        panStartXMax = xs.max;
+        canvas.style.cursor = 'grabbing';
+        return;
+      }
+      if (e.button === 0) {
+        // 左键：开始框选
+        ensureSelBox();
+        selecting = true;
+        selStartX = e.clientX;
+        selStartY = e.clientY;
+        canvas.style.cursor = 'crosshair';
+        return;
+      }
+    });
+
+    canvas.addEventListener('contextmenu', function(e) {
       e.preventDefault();
     });
 
     window.addEventListener('mousemove', function(e) {
-      if (!dragging || !self.chart) return;
-      var dx = e.clientX - startX;
-      var xs = self.chart.scales.x;
-      // 把像素偏移转成X轴数值偏移
-      var chartArea = self.chart.chartArea;
-      if (!chartArea) return;
-      var pxRange = chartArea.right - chartArea.left;
-      var valPerPx = (startMax - startMin) / pxRange;
-      var offset = -dx * valPerPx;
-      self.chart.zoomScale('x', { min: startMin + offset, max: startMax + offset }, 'default');
-      self.chart.update('none');
+      if (selecting && self.chart) {
+        var x1 = selStartX, x2 = e.clientX;
+        var y1 = selStartY, y2 = e.clientY;
+        selBox.style.left = Math.min(x1, x2) + 'px';
+        selBox.style.top = Math.min(y1, y2) + 'px';
+        selBox.style.width = Math.abs(x2 - x1) + 'px';
+        selBox.style.height = Math.abs(y2 - y1) + 'px';
+        selBox.style.display = 'block';
+        return;
+      }
+      if (panning && self.chart) {
+        var dx = e.clientX - panStartX;
+        var chartArea = self.chart.chartArea;
+        if (!chartArea) return;
+        var pxRange = chartArea.right - chartArea.left;
+        var valPerPx = (panStartXMax - panStartXMin) / pxRange;
+        var offset = -dx * valPerPx;
+        self.chart.zoomScale('x', { min: panStartXMin + offset, max: panStartXMax + offset }, 'default');
+        self.chart.update('none');
+      }
     });
 
-    window.addEventListener('mouseup', function() {
-      if (dragging) {
-        dragging = false;
+    window.addEventListener('mouseup', function(e) {
+      if (selecting && self.chart) {
+        selecting = false;
+        canvas.style.cursor = '';
+        if (selBox) selBox.style.display = 'none';
+
+        // 计算框选区域→数据范围
+        var chartArea = self.chart.chartArea;
+        if (!chartArea) return;
+        var xs = self.chart.scales.x;
+        var rect = canvas.getBoundingClientRect();
+
+        var boxLeft = Math.min(selStartX, e.clientX) - rect.left - chartArea.left;
+        var boxRight = Math.max(selStartX, e.clientX) - rect.left - chartArea.left;
+        var pxWidth = chartArea.right - chartArea.left;
+
+        var minSelSize = 8;
+        if (Math.abs(e.clientX - selStartX) < minSelSize && Math.abs(e.clientY - selStartY) < minSelSize) return;
+
+        var newMin = xs.min + (boxLeft / pxWidth) * (xs.max - xs.min);
+        var newMax = xs.min + (boxRight / pxWidth) * (xs.max - xs.min);
+
+        // 限制最小范围
+        if (newMax - newMin < 0.01) return;
+
+        self.chart.zoomScale('x', { min: newMin, max: newMax }, 'default');
+        self.chart.update('none');
+        return;
+      }
+      if (panning) {
+        panning = false;
         canvas.style.cursor = '';
       }
     });

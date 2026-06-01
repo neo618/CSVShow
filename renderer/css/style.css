@@ -76,15 +76,6 @@ html, body {
   letter-spacing: 1px;
 }
 
-.version-tag {
-  font-size: var(--font-size-sm);
-  color: var(--accent-cyan);
-  background: rgba(0, 206, 209, 0.1);
-  border: 1px solid var(--accent-cyan);
-  padding: 2px 8px;
-  letter-spacing: 1px;
-}
-
 .top-right {
   display: flex;
   align-items: center;
