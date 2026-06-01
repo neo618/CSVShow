@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>多产品CSV信号波形对比分析工具</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 顶部控制区 -->
+  <header id="top-bar">
+    <div class="top-left">
+      <span class="app-icon">▣</span>
+      <h1 class="app-title">多产品CSV信号波形对比分析工具</h1>
+      <span class="version-tag">v1.0</span>
+    </div>
+    <div class="top-right">
+      <span id="status-indicator" class="status-indicator status-idle">● 就绪</span>
+    </div>
+  </header>
+
+  <!-- 工具栏 -->
+  <div id="toolbar">
+    <button id="btn-select-dir" class="btn btn-primary">
+      <span class="btn-icon">📁</span> 选择目录
+    </button>
+    <span id="current-dir" class="dir-path" title="">未选择目录</span>
+    <div class="toolbar-spacer"></div>
+    <button id="btn-refresh" class="btn btn-secondary" disabled>
+      <span class="btn-icon">⟳</span> 刷新
+    </button>
+    <button id="btn-reset" class="btn btn-secondary">
+      <span class="btn-icon">✕</span> 重置
+    </button>
+  </div>
+
+  <!-- 主体区域 -->
+  <div id="main-content">
+    <!-- 左侧信息区 -->
+    <aside id="sidebar">
+      <!-- 文件统计 -->
+      <div class="panel">
+        <div class="panel-header">文件统计</div>
+        <div class="panel-body">
+          <div class="stat-row">
+            <span class="stat-label">CSV文件数</span>
+            <span id="stat-file-count" class="stat-value">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">通道总数</span>
+            <span id="stat-channel-count" class="stat-value">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">匹配文件数</span>
+            <span id="stat-matched-count" class="stat-value accent">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">总数据行数</span>
+            <span id="stat-row-count" class="stat-value">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 通道搜索 -->
+      <div class="panel">
+        <div class="panel-header">通道检索</div>
+        <div class="panel-body">
+          <input
+            type="text"
+            id="channel-search"
+            class="input-search"
+            placeholder="输入通道名精准搜索..."
+            disabled
+          />
+          <div id="channel-list" class="channel-list">
+            <div class="empty-hint">请先选择数据目录</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 文件列表 -->
+      <div class="panel">
+        <div class="panel-header">匹配文件清单</div>
+        <div class="panel-body">
+          <div id="file-list" class="file-list">
+            <div class="empty-hint">未匹配文件</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右侧可视化区 -->
+    <section id="main-viz">
+      <div class="viz-header">
+        <span id="chart-title" class="chart-title">-- 等待数据加载 --</span>
+        <button id="btn-export" class="btn btn-accent" disabled>
+          <span class="btn-icon">⬇</span> 导出图片
+        </button>
+      </div>
+      <div id="chart-container">
+        <canvas id="waveform-canvas"></canvas>
+        <div id="chart-placeholder" class="chart-placeholder">
+          <div class="placeholder-icon">📊</div>
+          <div class="placeholder-text">选择目录和通道以显示波形对比</div>
+        </div>
+      </div>
+      <div id="status-bar" class="status-bar">
+        <span id="status-text">就绪</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- 脚本 -->
+  <script src="../node_modules/chart.js/dist/chart.umd.js"></script>
+  <script src="../node_modules/chartjs-plugin-zoom/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="js/chartRenderer.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "csv-waveform-tool",
+  "version": "1.0.0",
+  "description": "多产品CSV信号波形对比分析工具 - 军工测试数据可视化",
+  "main": "main/index.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "WaveShow",
+  "license": "MIT",
+  "dependencies": {
+    "chart.js": "^4.4.0",
+    "chartjs-plugin-zoom": "^2.0.1",
+    "electron": "^28.3.3"
+  }
+}
